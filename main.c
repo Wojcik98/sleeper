@@ -18,10 +18,7 @@
 #define PRESSED(x) (!(PINB & (1<<x)))
 
 void sleep(void){
-	OCR0A = 0;
-	OCR0B = 0;
 	TCCR0B &= ~(1<<CS00) & ~(1<<CS01) & ~(1<<CS02);		// turn off timer
-	DDRB &= ~(1<<0) & ~(1<<1);	// turn off outputs
 	GIMSK |= (1<<PCIE);					// enable PCINT
 	PCMSK |= (1<<2) | (1<<3) | (1<<4);	// ...on pins PB2..4
 	SREG |= (1<<7);			// enable interrupts
@@ -32,9 +29,8 @@ void sleep(void){
 int main(void)
 {
 	uint8_t maxTimeMins = 8, maxBright = 100, prevState = 0, bright = 0;
-	uint8_t bpm = MAX_BPM;
+	uint8_t bpm = MAX_BPM, mode = 0;
 	uint16_t time = 0, last = 0, period = (60*SECOND)/bpm;
-	uint8_t mode = 0;
 
 	// SETUP
 	DDRB = (1<<1) | (1<<0);	// pb0 and 1 as outputs (led pwm), rest as inputs
@@ -53,7 +49,6 @@ int main(void)
 		}
 
 		if(time < WAITING_PERIOD){	// setting brightness and time
-			//mode &= ~(1<<1);
 			if(PRESSED(3)){		// increase time or brightness
 				if(mode == 0)	// add if button wasn't pressed in last cycle
 					maxBright = (maxBright < 245) ? (maxBright + 5*(!(prevState & (1<<3)))) : 255;	// bad steering near 255, but it won't be visible anyway
@@ -78,12 +73,6 @@ int main(void)
 			OCR0B = maxBright;
 		}
 		else if(time == WAITING_PERIOD){	// blinking
-			OCR0A = 150;
-			OCR0B = 150;
-			_delay_ms(255);
-			OCR0A = 0;
-			OCR0B = 0;
-			_delay_ms(255);
 			OCR0A = 150;
 			OCR0B = 150;
 			_delay_ms(255);
@@ -128,7 +117,10 @@ int main(void)
 			}
 		}
 
-		if(time >= maxTimeMins*MINUTE){	// sleep after maximum time is achieved
+		if(time >= maxTimeMins*MINUTE || (PRESSED(3) && PRESSED(4))){	// sleep after maximum time is achieved or two buttons are pressed
+			DDRB &= ~(1<<0) & ~(1<<1);	// turn off outputs
+			while(PRESSED(3) || PRESSED(4));
+			_delay_ms(255);
 			time = 0;
 			bpm = MAX_BPM;
 			prevState = 255;
