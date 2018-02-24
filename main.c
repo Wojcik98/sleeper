@@ -30,7 +30,7 @@ int main(void)
 {
 	uint8_t maxTimeMins = 8, maxBright = 100, prevState = 0, bright = 0;
 	uint8_t bpm = MAX_BPM, mode = 0;
-	uint16_t time = 0, last = 0, period = (60*SECOND)/bpm;
+	uint16_t time = 0, last = 0, period = MINUTE/bpm, halfPeriod = ((period+1)>>1) - (bpm<<2);
 
 	// SETUP
 	DDRB = (1<<1) | (1<<0);	// pb0 and 1 as outputs (led pwm), rest as inputs
@@ -60,8 +60,9 @@ int main(void)
 				prevState &= ~(1<<3);
 			}
 			if(PRESSED(4)){		// decrase...
+				uint8_t tmp = maxBright - 5*(!(prevState & (1<<4)));
 				if(mode == 0)
-					maxBright = (maxBright - 5*(!(prevState & (1<<4))) >= 0) ? (maxBright - 5*(!(prevState & (1<<4)))) : 0;
+					maxBright = (tmp >= 0) ? (tmp) : 0;
 				else
 					maxTimeMins = (maxTimeMins > 1) ? (maxTimeMins - !(prevState & (1<<4))) : maxTimeMins;
 				prevState |= (1<<4);
@@ -91,17 +92,20 @@ int main(void)
 			if(time%(MINUTE) == 0){				// decrease bpm
 				bpm = (bpm>MIN_BPM) ? (bpm - 1) : (bpm);
 			}
-
-			if(last + ((period+1)>>1) > time){	// lighten up
-				uint8_t pwm = ((time - last) * (maxBright)) / (period>>1);
+			uint8_t pwm;
+			if(last + halfPeriod > time){	// lighten up
+				pwm = ((time - last) * (maxBright)) / halfPeriod;
 				bright = (pwm > maxBright) ? maxBright : pwm;
 			}else{								// darken down
-				uint8_t pwm = ((last + period - time) * (maxBright)) / (period>>1);
+				pwm = ((last + (halfPeriod<<1) - time) * (maxBright)) / halfPeriod;
 				bright = (pwm > maxBright) ? maxBright : pwm;
 			}
 
+			bright = (last + (halfPeriod<<1) <= time) ? 0 : bright;
+
 			if(last + period <= time){			// start new cycle
 				period = (60*SECOND)/bpm;
+				halfPeriod = ((period+1)>>1) - (bpm<<2);
 				last = time;
 				bright = 0;
 			}
